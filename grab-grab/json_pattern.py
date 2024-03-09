@@ -1,8 +1,7 @@
-def into_json(org_id, company_id, name, city, address, website, ypage, rating, phones, categories, reviews, goods, opening_hours):
+def into_json(company_id, name, city, address, website, ypage, rating, phones, categories, reviews, goods, opening_hours):
     """ Шаблон файла OUTPUT.json"""
 
     data_grabbed = {
-        "ID": org_id,
         "company_id": company_id,
         "name": name,
         "city": city,

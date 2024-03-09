@@ -49,10 +49,15 @@ class GrabberApp:
         organizations_href = ""
         try:
             for i in range(int(self.count)):
-                # Симулируем прокрутку экрана на главной странице поиска
-                ActionChains(driver).click_and_hold(slider).move_by_offset(
-                    0, 100
-                ).release().perform()
+
+                try:
+                    # Симулируем прокрутку экрана на главной странице поиска
+                    ActionChains(driver).click_and_hold(slider).move_by_offset(
+                            0, 100
+                    ).release().perform()
+                except Exception as e:
+                    print("error " + getattr(e, 'message', repr(e)))
+                    pass
 
                 # Подгружаем ссылки на организации каждые 5 итераций
                 if (org_id == 0) or (org_id % 5 == 0):
@@ -83,9 +88,6 @@ class GrabberApp:
                 if "phones" in self.columns:
                     print("Get phones")
                     phones = InfoGetter.get_phones(soup, driver)
-                    if len(phones) == 0:
-                        print("No phones")
-                        continue
 
                 print("Phones " + str(phones))
 
@@ -144,24 +146,25 @@ class GrabberApp:
                     print("reviews " + str(reviews))
 
 
-                # Записываем данные в OUTPUT.json
-                output = json_pattern.into_json(
-                    org_id,
-                    company_id,
-                    name,
-                    self.city.strip().title(),
-                    address,
-                    website,
-                    ypage,
-                    rating,
-                    phones,
-                    categories,
-                    reviews,
-                    goods,
-                    opening_hours,
-                )
-                util_module.JSONWorker("set", output, self.output_file)
-                print(f"Данные добавлены, id - {org_id}")
+
+                if company_id:
+                    # Записываем данные в OUTPUT.json
+                    output = json_pattern.into_json(
+                        company_id,
+                        name,
+                        self.city.strip().title(),
+                        address,
+                        website,
+                        ypage,
+                        rating,
+                        phones,
+                        categories,
+                        reviews,
+                        goods,
+                        opening_hours,
+                    )
+                    util_module.JSONWorker("set", output, self.output_file)
+                    print(f"Данные добавлены, id - {org_id}")
 
                 # Закрываем вторичную вкладу и переходим на основную
                 driver.close()
@@ -169,7 +172,7 @@ class GrabberApp:
                 sleep(1)
 
         except Exception as e:
-            print("error " + str(e))
+            print("error " + getattr(e, 'message', repr(e)))
             pass
 
         print("Saved to " + self.output_file)

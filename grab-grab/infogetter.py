@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from selenium.common.exceptions import NoSuchElementException, MoveTargetOutOfBoundsException
 from selenium.webdriver import ActionChains
 from time import sleep
+import json
 
 class InfoGetter(object):
     """ Класс с логикой парсинга данных из объекта BeautifulSoup"""
@@ -116,26 +117,20 @@ class InfoGetter(object):
         phones = []
 
         try:
-            show_phones = driver.find_element_by_class_name(name='card-phones-view__more')
-            show_phones.click()
-            print('Click more')
-            sleep(2)
-
-            show_phones = driver.find_element_by_class_name(name='card-phones-view__phone-number')
-            show_phones.click()
-            print('Click number')
-            sleep(1)
-
-            soup_content = BeautifulSoup(driver.page_source, "lxml")
-
-            for data in soup_content.find_all("div", {"class": "card-phones-view__phone-number"}):
-                phones.append(data.getText())
+            jsonText = driver.find_element_by_class_name(name='state-view')
+            json_object = json.loads(jsonText.text)
+            items = json_object["stack"][0]["results"]["items"][0]["phones"]
+            for item in items:
+                if 'value' in item:
+                    phones.append(item["value"])
+                else:
+                    phones.append(item["number"])
 
             phones = list(set(phones))
             return phones
         except Exception as e:
-            print('get_phones error '+str(e))
-            return ""
+            print('get_phones error '+getattr(e, 'message', repr(e)))
+            return []
 
 
     @staticmethod
@@ -159,7 +154,7 @@ class InfoGetter(object):
             categories = list(set(categories))
             return categories
         except Exception as e:
-            print('get_categories error '+str(e))
+            print('get_categories error '+getattr(e, 'message', repr(e)))
             return ""
 
 
@@ -215,5 +210,5 @@ class InfoGetter(object):
 
             return reviews
         except Exception as e:
-            print('get_reviews error '+str(e))
+            print('get_reviews error '+getattr(e, 'message', repr(e)))
             return ""
