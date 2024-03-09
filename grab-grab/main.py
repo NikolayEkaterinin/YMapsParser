@@ -4,16 +4,19 @@ from selenium.common.exceptions import NoSuchElementException
 from bs4 import BeautifulSoup
 from time import sleep
 
+import argparse, sys
 import json_pattern
 import util_module
 from infogetter import InfoGetter
 
 
 class GrabberApp:
-
-    def __init__(self, city, org_type):
+    def __init__(self, city, org_type, count, output_file, columns):
         self.city = city
         self.org_type = org_type
+        self.output_file = output_file
+        self.count = count
+        self.columns = columns
 
     def grab_data(self):
         # chrome_options = webdriver.ChromeOptions
@@ -22,100 +25,183 @@ class GrabberApp:
         # chrome_options.add_argument("--headless")
         # chrome_options.add_argument("--disable-gpu")
 
-        # Создаем OUTPUT.json
-        util_module.JSONWorker("get", "")
+        open(self.output_file, 'w').close()
 
         driver = webdriver.Safari()
         driver.maximize_window()
-        driver.get('https://yandex.ru/maps')
+        driver.get("https://yandex.ru/maps")
+        sleep(1)
 
         # Вводим данные поиска
-        driver.find_element_by_class_name(name='search-form-view__input').send_keys(self.city + ' ' + self.org_type)
+        driver.find_element_by_class_name(name="search-form-view__input").send_keys(
+            " " + self.city + ", " + self.org_type
+        )
 
         # Нажимаем на кнопку поиска
-        driver.find_element_by_class_name(name='small-search-form-view__button').click()
+        driver.find_element_by_class_name(name="small-search-form-view__button").click()
         sleep(2)
 
-        slider = driver.find_element_by_class_name(name='scroll__scrollbar-thumb')
+        slider = driver.find_element_by_class_name(name="scroll__scrollbar-thumb")
         # Основная вкладка со списком всех организаций
         parent_handle = driver.window_handles[0]
 
         org_id = 0
         organizations_href = ""
         try:
-            for i in range(10000):
+            for i in range(int(self.count)):
                 # Симулируем прокрутку экрана на главной странице поиска
-                ActionChains(driver).click_and_hold(slider).move_by_offset(0, 100).release().perform()
+                ActionChains(driver).click_and_hold(slider).move_by_offset(
+                    0, 100
+                ).release().perform()
 
                 # Подгружаем ссылки на организации каждые 5 итераций
                 if (org_id == 0) or (org_id % 5 == 0):
-                    organizations_href = driver.find_elements_by_class_name(name='search-snippet-view__link-overlay')
+                    organizations_href = driver.find_elements_by_class_name(
+                        name="search-snippet-view__link-overlay"
+                    )
                 organization_url = organizations_href[i].get_attribute("href")
+
+                print(str(i) + ". Get " + organization_url)
 
                 # Открываем карточку организации в новой вкладке
                 driver.execute_script(f'window.open("{organization_url}","org_tab");')
-                child_handle = [x for x in driver.window_handles if x != parent_handle][0]
+                child_handle = [x for x in driver.window_handles if x != parent_handle][
+                    0
+                ]
                 driver.switch_to.window(child_handle)
                 sleep(1)
-
                 soup = BeautifulSoup(driver.page_source, "lxml")
                 org_id += 1
                 name = InfoGetter.get_name(soup)
                 address = InfoGetter.get_address(soup)
                 website = InfoGetter.get_website(soup)
-                opening_hours = InfoGetter.get_opening_hours(soup)
+                company_id = InfoGetter.get_company_id(soup)
                 ypage = driver.current_url
                 rating = InfoGetter.get_rating(soup)
 
-                # Формирование ссылки на отзывы
-                current_url_split = ypage.split('/')
+                phones = []
+                if "phones" in self.columns:
+                    print("Get phones")
+                    phones = InfoGetter.get_phones(soup, driver)
+                    if len(phones) == 0:
+                        print("No phones")
+                        continue
 
-                goods = ""
-                try:
-                    menu = driver.find_element_by_class_name(name='card-feature-view__main-content')
-                    menu_text = driver.find_element_by_class_name(name='card-feature-view__main-content').text
+                print("Phones " + str(phones))
 
-                    if ('товары и услуги' in menu_text.lower()) or ('меню' in menu_text.lower()):
-                        # Нажимаем на кнопку "Меню"/"Товары и услуги"
-                        menu.click()
-                        sleep(2)
-                        soup = BeautifulSoup(driver.page_source, "lxml")
-                        goods = InfoGetter.get_goods(soup)
-                except NoSuchElementException:
-                    pass
+                opening_hours = []
+                if "opening_hours" in self.columns:
+                    print("Get opening hours")
+                    opening_hours = InfoGetter.get_opening_hours(soup)
 
-                #  Переходим на вкладку "Отзывы"
-                reviews_url = 'https://yandex.ru/maps/org/' + current_url_split[5] + '/' + current_url_split[6] + \
-                              '/reviews'
-                driver.get(reviews_url)
-                sleep(2)
+                categories = []
+                if "categories" in self.columns:
+                    print("Get categories")
+                    categories = InfoGetter.get_categories(soup, driver)
 
-                reviews = InfoGetter.get_reviews(soup, driver)
+
+                goods = []
+                if "goods" in self.columns:
+                    print("Get goods")
+                    try:
+                        menu = driver.find_element_by_class_name(
+                            name="card-feature-view__main-content"
+                        )
+                        menu_text = driver.find_element_by_class_name(
+                            name="card-feature-view__main-content"
+                        ).text
+
+                        if ("товары и услуги" in menu_text.lower()) or (
+                            "меню" in menu_text.lower()
+                        ):
+                            # Нажимаем на кнопку "Меню"/"Товары и услуги"
+                            menu.click()
+                            sleep(2)
+                            soup = BeautifulSoup(driver.page_source, "lxml")
+                            goods = InfoGetter.get_goods(soup)
+                    except NoSuchElementException:
+                        pass
+
+
+                reviews = []
+                if "reviews" in self.columns:
+                    print("Get reviews")
+
+                    # Формирование ссылки на отзывы
+                    current_url_split = ypage.split("/")
+
+                    # Переходим на вкладку "Отзывы"
+                    reviews_url = (
+                        "https://yandex.ru/maps/org/"
+                        + current_url_split[5]
+                        + "/"
+                        + current_url_split[6]
+                        + "/reviews"
+                    )
+                    driver.get(reviews_url)
+                    sleep(2)
+                    reviews = InfoGetter.get_reviews(soup, driver)
+                    print("reviews " + str(reviews))
+
 
                 # Записываем данные в OUTPUT.json
-                output = json_pattern.into_json(org_id, name, address, website, opening_hours, ypage, goods, rating,
-                                                reviews)
-                util_module.JSONWorker("set", output)
-                print(f'Данные добавлены, id - {org_id}')
+                output = json_pattern.into_json(
+                    org_id,
+                    company_id,
+                    name,
+                    self.city.strip().title(),
+                    address,
+                    website,
+                    ypage,
+                    rating,
+                    phones,
+                    categories,
+                    reviews,
+                    goods,
+                    opening_hours,
+                )
+                util_module.JSONWorker("set", output, self.output_file)
+                print(f"Данные добавлены, id - {org_id}")
 
                 # Закрываем вторичную вкладу и переходим на основную
                 driver.close()
                 driver.switch_to.window(parent_handle)
                 sleep(1)
 
-        except Exception:
+        except Exception as e:
+            print("error " + str(e))
             pass
 
-        print('Данные сохранены в OUTPUT.json')
+        print("Saved to " + self.output_file)
         driver.quit()
 
 
 def main():
-    city = input('Область поиска: ')
-    org_type = input('Тип организации: ')
-    grabber = GrabberApp(city, org_type)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--city", help="Do the city name option")
+    parser.add_argument("--search", help="Do the search option")
+    parser.add_argument("--output", help="Do the output file option")
+    parser.add_argument("--count", help="Do the count companies option")
+    parser.add_argument("--columns", help="Do the optional columns option. reviews, categories, goods, opening_hours, phones")
+
+    args = parser.parse_args()
+
+    print("Start city " + args.city)
+
+    if not args.columns:
+        columns = []
+    else:
+        columns = args.columns.split(',')
+
+    if not args.output:
+        output = '../out/'+args.city+'_'+args.search+'.json'
+    else:
+        output = args.output
+
+    grabber = GrabberApp(args.city, args.search, args.count, output, columns)
     grabber.grab_data()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

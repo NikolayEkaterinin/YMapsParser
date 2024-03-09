@@ -13,6 +13,7 @@ __pycache__/
 
 # Editor-based HTTP Client requests
 /httpRequests/
+/out/
 
 # PyCharm configs
 .idea

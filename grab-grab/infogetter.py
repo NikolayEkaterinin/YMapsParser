@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from selenium.common.exceptions import NoSuchElementException, MoveTargetOutOfBoundsException
 from selenium.webdriver import ActionChains
-
+from time import sleep
 
 class InfoGetter(object):
     """ Класс с логикой парсинга данных из объекта BeautifulSoup"""
@@ -27,6 +27,18 @@ class InfoGetter(object):
                 address = data.getText()
 
             return address
+        except Exception:
+            return ""
+
+    @staticmethod
+    def get_company_id(soup_content):
+        """ Получение id"""
+
+        try:
+            for data in soup_content.find_all("div", {"class": "business-card-view _wide"}):
+                website = data.get('data-id')
+
+            return website
         except Exception:
             return ""
 
@@ -97,6 +109,61 @@ class InfoGetter(object):
 
         return dict(zip(dishes, prices))
 
+
+    @staticmethod
+    def get_phones(soup_content, driver):
+        """ Получение номеров"""
+        phones = []
+
+        try:
+            show_phones = driver.find_element_by_class_name(name='card-phones-view__more')
+            show_phones.click()
+            print('Click more')
+            sleep(2)
+
+            show_phones = driver.find_element_by_class_name(name='card-phones-view__phone-number')
+            show_phones.click()
+            print('Click number')
+            sleep(1)
+
+            soup_content = BeautifulSoup(driver.page_source, "lxml")
+
+            for data in soup_content.find_all("div", {"class": "card-phones-view__phone-number"}):
+                phones.append(data.getText())
+
+            phones = list(set(phones))
+            return phones
+        except Exception as e:
+            print('get_phones error '+str(e))
+            return ""
+
+
+    @staticmethod
+    def get_categories(soup_content, driver):
+        """ Получение категорий"""
+        categories = []
+
+        try:
+            show_phones = driver.find_element_by_class_name(name='_name_features')
+            show_phones.click()
+            print('Click features')
+            sleep(1)
+
+            soup_content = BeautifulSoup(driver.page_source, "lxml")
+
+            for data in soup_content.find_all("a", {"class": "orgpage-categories-info-view__link"}):
+                categories.append(data.getText())
+                print('Category '+data.getText())
+
+
+            categories = list(set(categories))
+            return categories
+        except Exception as e:
+            print('get_categories error '+str(e))
+            return ""
+
+
+
     @staticmethod
     def get_rating(soup_content):
         """ Получение рейтинга организации"""
@@ -119,7 +186,7 @@ class InfoGetter(object):
         # Узнаём количество отзывов
         try:
             reviews_count = int(soup_content.find_all("div", {"class": "tabs-select-view__counter"})[-1].text)
-
+            print("reviews count" + str(reviews_count))
         except ValueError:
             reviews_count = 0
 
@@ -143,9 +210,10 @@ class InfoGetter(object):
 
         try:
             soup_content = BeautifulSoup(driver.page_source, "lxml")
-            for data in soup_content.find_all("div", {"class": "business-review-view__body-text _collapsed"}):
+            for data in soup_content.find_all("span", {"class": "business-review-view__body-text"}):
                 reviews.append(data.getText())
 
             return reviews
-        except Exception:
+        except Exception as e:
+            print('get_reviews error '+str(e))
             return ""
