@@ -4,6 +4,7 @@ from selenium.common.exceptions import NoSuchElementException
 from bs4 import BeautifulSoup
 from time import sleep
 
+import traceback
 import argparse, sys
 import json_pattern
 import util_module
@@ -41,7 +42,6 @@ class GrabberApp:
         driver.find_element_by_class_name(name="small-search-form-view__button").click()
         sleep(2)
 
-        slider = driver.find_element_by_class_name(name="scroll__scrollbar-thumb")
         # Основная вкладка со списком всех организаций
         parent_handle = driver.window_handles[0]
 
@@ -50,14 +50,8 @@ class GrabberApp:
         try:
             for i in range(int(self.count)):
 
-                try:
-                    # Симулируем прокрутку экрана на главной странице поиска
-                    ActionChains(driver).click_and_hold(slider).move_by_offset(
-                            0, 100
-                    ).release().perform()
-                except Exception as e:
-                    print("error " + getattr(e, 'message', repr(e)))
-                    pass
+                new_scroll = 900 *org_id
+                driver.execute_script("document.getElementsByClassName('scroll__container')[0].scrollTop="+str(new_scroll)+";")
 
                 # Подгружаем ссылки на организации каждые 5 итераций
                 if (org_id == 0) or (org_id % 5 == 0):
@@ -172,7 +166,8 @@ class GrabberApp:
                 sleep(1)
 
         except Exception as e:
-            print("error " + getattr(e, 'message', repr(e)))
+            print(traceback.format_exc())
+
             pass
 
         print("Saved to " + self.output_file)
