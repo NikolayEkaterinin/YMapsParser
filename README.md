@@ -32,12 +32,49 @@
 git clone git@github.com:redrum0x/YMapsParser.git
 cd YMapsParser/grab-grab
 pip3 install -r requirements.txt
-python3 main.py --city="москва" --search=банк --count=100 --output=../out/file.json
+python3 main.py --cities="москва" --search=банк --count=100 --output="../out/file.json"
 ```
 
 Некоторые поля являются опциональными и по умолчанию не парсятся, их можно добавить, указав 
 ```console
 --columns=reviews,categories,goods,opening_hours,phones
 ````
+
+Файл со списком городов
+```console
+--cities_file="../dist/cities.txt" 
+````
+
+Список городов
+```console
+--cities="Москва,Ростов" 
+````
+
+Поисковая фраза
+```console
+--search="Кафе" 
+````
+
+Файл со списком поисковых фраз
+```console
+--search_file="../dist/cities.txt" 
+````
+
+Браузер (safari, chrome)
+```console
+--driver="safari" 
+````
+
+Количество компаний
+```console
+--count=2000 
+````
+
+Файл с результатами
+```console
+--output="../out/file.json"
+````
+
+
 ## Лицензия
 [GNU General Public License v3.0](https://github.com/redrum0x/YMapsParser/blob/main/LICENSE)

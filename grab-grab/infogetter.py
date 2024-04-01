@@ -2,6 +2,8 @@ from bs4 import BeautifulSoup
 from selenium.common.exceptions import NoSuchElementException, MoveTargetOutOfBoundsException
 from selenium.webdriver import ActionChains
 from time import sleep
+from datetime import datetime
+from pygame import mixer
 import json
 
 class InfoGetter(object):
@@ -12,7 +14,7 @@ class InfoGetter(object):
         """ Получение названия организации """
 
         try:
-            for data in soup_content.find_all("h1", {"class": "orgpage-header-view__header"}):
+            for data in soup_content.find_all("h1", {"class": "card-title-view__title"}):
                 name = data.getText()
 
             return name
@@ -20,11 +22,25 @@ class InfoGetter(object):
             return ""
 
     @staticmethod
+    def check_captcha(driver):
+        """ Проверка капчи """
+        soup = BeautifulSoup(driver.page_source, "lxml")
+        print(datetime.utcnow().strftime('%F %T.%f')[:-3]+". Check")
+        if soup.find_all("div", {"class": "CheckboxCaptcha"}) or soup.find_all("div", {"class": "AdvancedCaptcha"}) :
+            print(datetime.utcnow().strftime('%F %T.%f')[:-3]+". Captcha. Wait 20s")
+            mixer.init()
+            mixer.music.load('../dist/alert.wav')
+            mixer.music.play()
+            sleep(20)
+            InfoGetter.check_captcha(driver)
+
+
+    @staticmethod
     def get_address(soup_content):
         """ Получение адреса организации """
 
         try:
-            for data in soup_content.find_all("a", {"class": "business-contacts-view__address-link"}):
+            for data in soup_content.find_all("div", {"class": "business-contacts-view__address-link"}):
                 address = data.getText()
 
             return address
@@ -32,15 +48,29 @@ class InfoGetter(object):
             return ""
 
     @staticmethod
+    def get_company_url(soup_content):
+        """ Получение url"""
+
+        try:
+            for data in soup_content.find_all("a", {"class": "card-title-view__title-link"}):
+                url = "https://yandex.ru"+data.get('href')
+
+            return url
+        except Exception as e:
+            print('get_company_url error '+getattr(e, 'message', repr(e)))
+            return ""
+
+    @staticmethod
     def get_company_id(soup_content):
         """ Получение id"""
 
         try:
-            for data in soup_content.find_all("div", {"class": "business-card-view _wide"}):
+            for data in soup_content.find_all("div", {"class": "business-card-view"}):
                 website = data.get('data-id')
 
             return website
-        except Exception:
+        except Exception as e:
+            print('get_company_id error '+getattr(e, 'message', repr(e)))
             return ""
 
     @staticmethod
@@ -65,7 +95,8 @@ class InfoGetter(object):
                 opening_hours.append(data.get('content'))
 
             return opening_hours
-        except Exception:
+        except Exception as e:
+            print('get_categories error '+getattr(e, 'message', repr(e)))
             return ""
 
     @staticmethod
@@ -110,26 +141,30 @@ class InfoGetter(object):
 
         return dict(zip(dishes, prices))
 
-
     @staticmethod
-    def get_phones(soup_content, driver):
-        """ Получение номеров"""
+    def get_search_phones(soup_content, driver, i):
+        """ Получение номеров из карточки на странице поиска"""
         phones = []
 
         try:
-            jsonText = driver.find_element_by_class_name(name='state-view')
-            json_object = json.loads(jsonText.text)
-            items = json_object["stack"][0]["results"]["items"][0]["phones"]
-            for item in items:
-                if 'value' in item:
-                    phones.append(item["value"])
-                else:
-                    phones.append(item["number"])
+            driver.execute_script("document.getElementsByClassName('card-phones-view__more')[0].click();")
+#            sleep(0.2)
+
+            driver.execute_script("document.getElementsByClassName('card-phones-view__phone-number')[0].click();")
+#            sleep(0.2)
+
+            soup_content = BeautifulSoup(driver.page_source, "lxml")
+
+            for data in soup_content.find_all("div", {"class": "card-phones-view__phone-number"}):
+                phones.append(data.getText())
 
             phones = list(set(phones))
             return phones
         except Exception as e:
-            print('get_phones error '+getattr(e, 'message', repr(e)))
+            err = getattr(e, 'message', repr(e))
+            if "undefined is not an object" in err:
+                return []
+            print('get_phones error '+err)
             return []
 
 
@@ -139,17 +174,8 @@ class InfoGetter(object):
         categories = []
 
         try:
-            show_phones = driver.find_element_by_class_name(name='_name_features')
-            show_phones.click()
-            print('Click features')
-            sleep(1)
-
-            soup_content = BeautifulSoup(driver.page_source, "lxml")
-
-            for data in soup_content.find_all("a", {"class": "orgpage-categories-info-view__link"}):
+            for data in soup_content.find_all("a", {"class": "business-categories-view__category"}):
                 categories.append(data.getText())
-                print('Category '+data.getText())
-
 
             categories = list(set(categories))
             return categories
@@ -162,21 +188,25 @@ class InfoGetter(object):
     @staticmethod
     def get_rating(soup_content):
         """ Получение рейтинга организации"""
-
         rating = ""
         try:
-            for data in soup_content.find_all("span", {"class": "business-summary-rating-badge-view__rating-text"}):
+            elem = soup_content.find("div", {"class": "business-card-title-view__header-rating"})
+            for data in elem.find_all("span", {"class": "business-rating-badge-view__rating-text"}):
                 rating += data.getText()
             return rating
-        except Exception:
+        except Exception as e:
+            print('get_rating error '+getattr(e, 'message', repr(e)))
             return ""
 
     @staticmethod
     def get_reviews(soup_content, driver):
         """ Получение отзывов о организации"""
+        print("Get reviews")
+
+        driver.execute_script("document.getElementsByClassName('_name_reviews')[0].click();")
+        sleep(1)
 
         reviews = []
-        slider = driver.find_element_by_class_name(name='scroll__scrollbar-thumb')
 
         # Узнаём количество отзывов
         try:
@@ -198,7 +228,7 @@ class InfoGetter(object):
 
         for i in find_range:
             try:
-                ActionChains(driver).click_and_hold(slider).move_by_offset(0, 50).release().perform()
+                driver.execute_script("document.getElementsByClassName('scroll__container')[1].scrollTop="+str(500*i)+";")
 
             except MoveTargetOutOfBoundsException:
                 break
